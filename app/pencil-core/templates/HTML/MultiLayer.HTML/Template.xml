@@ -1,0 +1,7 @@
+<Template xmlns="http://www.evolus.vn/Namespace/Pencil">
+    <Property name="id">Evolus:HTML:MultiLayer.Template</Property>
+    <Property name="name">MultiLayer HTML Template</Property>
+    <Property name="author">Neoscope.info</Property>
+    <Property name="description">HTML export template that lists all pages in different div of a single document.</Property>
+    <Property name="styleSheet">MultiLayer.xslt</Property>
+</Template>
