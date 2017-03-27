@@ -53,7 +53,7 @@
         </article>
     </xsl:template>
     <xsl:template match="p:Link">
-        <area class="PageLink" data-targetpage="{@targetFid}_page" shape="rect"
+        <area class="PageLink" data-targetpage="{@targetFid}_page" data-targetFid="{@targetFid}" data-targetName="{@targetName}" shape="rect"
             coords="{@x},{@y},{@x+@w},{@y+@h}" title="Go to page '{@targetName}'"/>
     </xsl:template>
 

@@ -7,14 +7,25 @@ $(document).ready(function(){
 
     $(".PageLink").click(function(){
         var targetPageId = $(this).data("targetpage");
-        $(this).hide();
+        $(".Page").hide();
         $("#"+targetPageId).show();
     });
 
-   $(function () {
+    $("#DocumentInformation").click(function(){
         $("#DocumentInformation").hide();
         $("#Pages").show();
         $(".Page").first().show();
     });
 
+    $("footer").click(function(){
+        $("#DocumentInformation").show();
+        $("#Pages").hide();
+        $(".Page").hide();
+    });
+
+    $(function(){
+        $("#DocumentInformation").hide();
+        $("#Pages").show();
+        $(".Page").first().show();
+    });
 });

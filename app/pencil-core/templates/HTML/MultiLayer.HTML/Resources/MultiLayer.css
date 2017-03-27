@@ -2,29 +2,34 @@
     place extra stylesheet here
 */
 #DocumentInformation {
-    position: fixed;
+    position: static;
     top:0;
     left:0;
 }
 
 #Pages {
-    position: fixed;
+    position: static;
     top:0;
     left:0;
+    padding-bottom: 1em;
 
+}
+
+main {
+    position: static;
+    padding-top: 0.25em;
+    padding-bottom: 1em;
 }
 
 footer {
-    position:relative;
-    visibility: hidden;
+
     font-size: x-small;
     text-align: right;
+    padding-top: 2em;
 }
 
 .Page {
-    position: fixed;
-    top:0;
-    left:0;
+padding-bottom: 0.5 em;
 
 }
 
