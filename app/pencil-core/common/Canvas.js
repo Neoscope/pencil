@@ -1,4 +1,4 @@
-function Canvas(element) {
+function Canvas(element, options) {
     this.element = element;
     this.oldElement = "";
     this.__delegate("addEventListener", "hasAttribute", "getAttribute", "setAttribute", "setAttributeNS", "removeAttribute", "removeAttributeNS", "dispatchEvent");
@@ -18,6 +18,9 @@ function Canvas(element) {
     var thiz = this;
     this.lockPointerFunction = null;
     this.autoScrollTimout = null;
+
+    this.options = options || {};
+
     this.startAutoScrollFunction = function(func) {
         if (this.autoScrollTimout == null) {
             // this.lockPointerFunction = function () {
@@ -178,6 +181,7 @@ function Canvas(element) {
         thiz.handleClick(event);
     }, false);
     this.svg.addEventListener("mousedown", function (event) {
+        thiz.movementDisabled = Pencil.controller.movementDisabled || event.ctrlKey;
         // document.commandDispatcher.advanceFocus();
         thiz.focus();
         thiz.handleMouseDown(event);
@@ -205,7 +209,7 @@ function Canvas(element) {
             document.removeEventListener("mousemove", arguments.callee, false);
             return;
         }
-        if (thiz.controllerHeld && thiz.currentController &&
+        if (thiz.controllerHeld && thiz.currentController && thiz._scrollPane &&
              (thiz._scrollPane.clientHeight < thiz._scrollPane.scrollHeight || thiz._scrollPane.clientWidth < thiz._scrollPane.scrollWidth)) {
             thiz.handleScrollPane(event);
         }
@@ -337,6 +341,10 @@ function Canvas(element) {
         if (["grid.enabled", "edit.gridSize", "edit.gridStyle"].indexOf(data.name) >= 0) {
             CanvasImpl.setupGrid.apply(this);
         }
+    }.bind(this));
+    window.globalEventBus.listen("doc-options-change", function (data) {
+        CanvasImpl.drawMargin.apply(this);
+        this.snappingHelper.rebuildSnappingGuide();
     }.bind(this));
 
 }
@@ -645,23 +653,13 @@ Canvas.prototype.insertShape = function (shapeDef, bound, overridingValueMap) {
             overridingValueMap ? overridingValueMap : null ]);
 
 };
-Canvas.prototype.insertShapeImpl_ = function (shapeDef, bound,
-        overridingValueMap) {
-
-    // instantiate the shape using the shapedef
-    var shape = this.ownerDocument.createElementNS(PencilNamespaces.svg, "g");
-    shape.setAttributeNS(PencilNamespaces.p, "p:type", "Shape");
-    shape.setAttributeNS(PencilNamespaces.p, "p:def", shapeDef.id);
-
-
-    if (overridingValueMap && overridingValueMap._shortcut) {
-        shape.setAttributeNS(PencilNamespaces.p, "p:sc",
-                overridingValueMap._shortcut.displayName);
+Canvas.prototype.invalidateShapeContent = function (shape, shapeDef) {
+    var count = shape.childNodes.length;
+    for (var i = count - 1; i >= 0; i --) {
+        var child = shape.childNodes[i];
+        if (child.namespaceURI == PencilNamespaces.p && child.localName == "metadata") continue;
+        shape.removeChild(child);
     }
-
-    shape.appendChild(this.ownerDocument.createElementNS(PencilNamespaces.p,
-            "p:metadata"));
-
     for (var i = 0; i < shapeDef.contentNode.childNodes.length; i++) {
         shape.appendChild(this.ownerDocument.importNode(
                 shapeDef.contentNode.childNodes[i], true));
@@ -682,6 +680,25 @@ Canvas.prototype.insertShapeImpl_ = function (shapeDef, bound,
     });
 
     Dom.renewId(shape);
+};
+Canvas.prototype.insertShapeImpl_ = function (shapeDef, bound,
+        overridingValueMap) {
+
+    // instantiate the shape using the shapedef
+    var shape = this.ownerDocument.createElementNS(PencilNamespaces.svg, "g");
+    shape.setAttributeNS(PencilNamespaces.p, "p:type", "Shape");
+    shape.setAttributeNS(PencilNamespaces.p, "p:def", shapeDef.id);
+
+
+    if (overridingValueMap && overridingValueMap._shortcut) {
+        shape.setAttributeNS(PencilNamespaces.p, "p:sc",
+                overridingValueMap._shortcut.displayName);
+    }
+
+    shape.appendChild(this.ownerDocument.createElementNS(PencilNamespaces.p,
+            "p:metadata"));
+
+    this.invalidateShapeContent(shape, shapeDef);
 
     // add the newly created shape into the drawing layer
     this.drawingLayer.appendChild(shape);
@@ -867,7 +884,8 @@ Canvas.prototype.handleMouseWheel = function(event) {
 }
 
 Canvas.prototype.handleScrollPane = function(event) {
-    var thiz =this;
+    if (!this._scrollPane) return;
+    var thiz = this;
     var scrollBarSize = 15;
     var scrollValue = 20;
     var loc = { x: event.clientX, y: event.clientY };
@@ -1148,6 +1166,8 @@ Canvas.prototype.handleMouseMove = function (event, fake) {
             if (!fake) {
                 event.preventDefault();
                 event.stopPropagation();
+
+                if (this.movementDisabled) return;
             }
 
             if (this.currentController.markAsMoving)
@@ -1386,7 +1406,7 @@ Canvas.prototype.handleKeyPress = function (event) {
             event.preventDefault();
         }
     } else if (event.keyCode == DOM_VK_F2) {
-        if (this.currentController) {
+        if (this.currentController && !event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey) {
             Dom.emitEvent("p:TextEditingRequested", this.element, {
                 controller : this.currentController
             });
@@ -2401,8 +2421,7 @@ Canvas.prototype.run = function (job, targetObject, actionName, args) {
         Console.dumpError(e);
     } finally {
         this._saveMemento(actionName);
-        if (!Pencil.controller.activePageLoading)
-            this._sayContentModified();
+        if (Pencil.controller && !Pencil.controller.activePageLoading) this._sayContentModified();
     }
 
 };
@@ -2520,21 +2539,42 @@ Canvas.prototype.sizeToContent = function (hPadding, vPadding) {
     return newSize;
 };
 Canvas.prototype.sizeToContent__ = function (hPadding, vPadding) {
+    var pageMargin = Pencil.controller.getDocumentPageMargin() || 0;
+
+    hPadding += pageMargin;
+    vPadding += pageMargin;
 
     this.zoomTo(1.0);
 
     var thiz = this;
     var maxBox = null;
+    function out(name, rect) {
+        console.log(name, "left: ", rect.left, "top: ", rect.top, "width: ", rect.width, "height: ", rect.height);
+    }
+    out("this.svg", this.svg.getBoundingClientRect());
     Dom.workOn("./svg:g[@p:type]", this.drawingLayer, function (node) {
         try {
             var controller = thiz.createControllerFor(node);
+            if (controller.def && controller.def.meta.excludeSizeCalculation) return;
             var bbox = controller.getBoundingRect();
+            //HACK: inspect the strokeWidth attribute to fix half stroke bbox issue
             var box = {
                 x1 : bbox.x,
                 y1 : bbox.y,
                 x2 : bbox.x + bbox.width,
                 y2 : bbox.y + bbox.height
             };
+
+            if (controller.getGeometry) {
+                var geo = controller.getGeometry();
+                if (geo.ctm && geo.ctm.a == 1 && geo.ctm.b == 0 && geo.ctm.c == 0 && geo.ctm.d == 1 && geo.dim) {
+                    box.x1 = geo.ctm.e;
+                    box.y1 = geo.ctm.f;
+                    box.x2 = box.x1 + geo.dim.w;
+                    box.y2 = box.y1 + geo.dim.h;
+                }
+            }
+
             if (maxBox == null) {
                 maxBox = box;
             } else {
@@ -2556,6 +2596,10 @@ Canvas.prototype.sizeToContent__ = function (hPadding, vPadding) {
                 Util.getMessage("button.cancel.close"));
         return;
     }
+    maxBox.x1 = Math.floor(maxBox.x1);
+    maxBox.x2 = Math.ceil(maxBox.x2);
+    maxBox.y1 = Math.floor(maxBox.y1);
+    maxBox.y2 = Math.ceil(maxBox.y2);
 
     var width = maxBox.x2 - maxBox.x1 + 2 * hPadding;
     var height = maxBox.y2 - maxBox.y1 + 2 * vPadding;
