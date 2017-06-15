@@ -28,7 +28,7 @@ Controller.prototype.makeSubDir = function (sub) {
     return fullPath;
 };
 Controller.prototype.getDocumentName = function () {
-    return this.documentPath ? path.basename(this.documentPath).replace(/\.epz$/, "") : "* Unsaved document";
+    return this.documentPath ? path.basename(this.documentPath).replace(/\.[a-z]+$/, "") : "* Unsaved document";
 };
 // Controller.prototype.newDocument = function () {
 //     var thiz = this;
@@ -60,6 +60,7 @@ Controller.prototype.confirmAndclose = function (onClose) {
         this.modified = false;
 
         this.sayControllerStatusChanged();
+        ShapeTestCanvasPane._instance.quitTesting();
 
         if (onClose) onClose();
     }.bind(this);
@@ -1057,6 +1058,15 @@ Controller.prototype.copyAsRef = function (sourcePath, callback) {
 
     rd.pipe(wr);
 };
+Controller.prototype.generateCollectionResourceRefId = function (collection, resourcePath) {
+    var id = "collection " + collection.id + " " + resourcePath;
+    var md5 = require("md5");
+    id = md5(id) + path.extname(resourcePath);
+
+    id = id.replace(/[^a-z\-0-9]+/gi, "_");
+
+    return id;
+};
 Controller.prototype.collectionResourceAsRefSync = function (collection, resourcePath) {
     var parts = resourcePath.split("/");
     sourcePath = collection.installDirPath;
@@ -1069,8 +1079,7 @@ Controller.prototype.collectionResourceAsRefSync = function (collection, resourc
         return null;
     }
 
-    var id = "collection " + collection.id + " " + resourcePath;
-    id = id.replace(/[^a-z\-0-9]+/gi, "_");
+    var id = this.generateCollectionResourceRefId(collection, resourcePath);
 
     var filePath = path.join(this.makeSubDir(Controller.SUB_REFERENCE), id);
 
@@ -1414,14 +1423,38 @@ Controller.prototype.exportAsLayout = function () {
     });
 };
 
+Controller.prototype.getDocumentPageMargin = function () {
+    if (!StencilCollectionBuilder.isDocumentConfiguredAsStencilCollection()) {
+        return null;
+    }
+    var options = StencilCollectionBuilder.getCurrentDocumentOptions();
+    if (!options) {
+        return null;
+    }
 
-window.onbeforeunload = function (event) {
+    return options.pageMargin || Config.get(Config.DEV_PAGE_MARGIN_SIZE) || 40;
+};
+
+Controller.prototype.logShapeReparationRequest = function (shapeNode) {
+    if (!this.repairingShapes) this.repairingShapes = [];
+    this.repairingShapes.push(shape);
+}
+
+
+window.addEventListener("beforeunload", function (event) {
     // Due to a change of Chrome 51, returning non-empty strings or true in beforeunload handler now prevents the page to unload
+    if (Pencil.documentHandler && Pencil.documentHandler.isSaving) {
+        console.log("Close during save prevented!");
+        event.returnValue = false;
+        return;
+    }
+
     var remote = require("electron").remote;
     if (remote.app.devEnable) return;
 
     if (Controller.ignoreNextClose) {
         Controller.ignoreNextClose = false;
+        event.returnValue = false;
         return;
     }
 
@@ -1433,6 +1466,7 @@ window.onbeforeunload = function (event) {
                 currentWindow.close();
             });
         }, 10);
-        return true;
+        event.returnValue = false;
+        return;
     }
-};
+});

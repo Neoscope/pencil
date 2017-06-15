@@ -111,6 +111,23 @@ SnappingHelper.prototype.rebuildSnappingGuide = function () {
             }
         }
     }
+
+    var margin = (Pencil.controller && !this.canvas.options.ignorePageMarging) ? Pencil.controller.getDocumentPageMargin() : 0;
+    if (margin) {
+        var uid = Util.newUUID();
+        this.snappingGuide[uid] = {
+                vertical: [
+                    new SnappingData("MarginSnap", margin, "Left", true, uid),
+                    new SnappingData("MarginSnap", this.canvas.width - margin, "Right", true, uid)
+                ],
+                horizontal: [
+                    new SnappingData("MarginSnap", margin, "Top", false, uid),
+                    new SnappingData("MarginSnap", this.canvas.height - margin, "Bottom", false, uid)
+                ]
+            };
+
+    }
+
     this.sortData();
 };
 SnappingHelper.prototype.updateSnappingGuide = function (controller, remove) {

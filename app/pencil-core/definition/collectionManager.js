@@ -47,6 +47,34 @@ CollectionManager.findCollection = function (collectionId) {
     }
     return null;
 };
+CollectionManager.loadAdHocCollection = function (dir) {
+    CollectionManager.unloadLastAdHocCollection();
+
+    var collection = new ShapeDefCollectionParser().parseURL(path.join(dir, "Definition.xml"));
+    collection.userDefined = false;
+    collection.installDirPath = dir;
+    collection.isAdHoc = true;
+    collection.visible = false;
+
+    CollectionManager.addShapeDefCollection(collection);
+    CollectionManager.adHocCollection = collection;
+
+    return collection;
+};
+CollectionManager.unloadLastAdHocCollection = function () {
+    if (!CollectionManager.adHocCollection) return;
+
+    for (var item in CollectionManager.adHocCollection.shapeDefs) {
+        var shapeDef = CollectionManager.adHocCollection.shapeDefs[item];
+        if (shapeDef.constructor == Shortcut) {
+            delete CollectionManager.shapeDefinition.shortcutMap[shapeDef.id];
+        } else {
+            delete CollectionManager.shapeDefinition.shapeDefMap[shapeDef.id];
+        }
+    }
+
+    CollectionManager.adHocCollection = null;
+};
 CollectionManager.reloadDeveloperStencil = function (showNotification) {
     ApplicationPane._instance.busy();
 
@@ -152,8 +180,13 @@ CollectionManager._loadUserDefinedStencilsIn = function (stencilDir, excluded, i
                 continue;
             }
             var folderPath = path.join(stencilDir, definitionFile);
-            if (CollectionManager._loadStencil(folderPath, parser, isSystem ? true : false, isDeveloperStencil ? true : false)) {
-                count++;
+            if (!fs.lstatSync(folderPath).isDirectory()) continue;
+            try {
+                if (CollectionManager._loadStencil(folderPath, parser, isSystem ? true : false, isDeveloperStencil ? true : false)) {
+                    count++;
+                }
+            } catch (e) {
+                console.error(e);
             }
         }
     } catch (e) {
