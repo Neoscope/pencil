@@ -360,6 +360,72 @@ Object.defineProperty(Event.prototype, "originalTarget", {
 
 }));
 
+(function(){
+  var attachEvent = document.attachEvent;
+  var isIE = navigator.userAgent.match(/Trident/);
+  console.log(isIE);
+  var requestFrame = (function(){
+    var raf = window.requestAnimationFrame || window.mozRequestAnimationFrame || window.webkitRequestAnimationFrame ||
+        function(fn){ return window.setTimeout(fn, 20); };
+    return function(fn){ return raf(fn); };
+  })();
+
+  var cancelFrame = (function(){
+    var cancel = window.cancelAnimationFrame || window.mozCancelAnimationFrame || window.webkitCancelAnimationFrame ||
+           window.clearTimeout;
+    return function(id){ return cancel(id); };
+  })();
+
+  function resizeListener(e){
+    var win = e.target || e.srcElement;
+    if (win.__resizeRAF__) cancelFrame(win.__resizeRAF__);
+    win.__resizeRAF__ = requestFrame(function(){
+      var trigger = win.__resizeTrigger__;
+      trigger.__resizeListeners__.forEach(function(fn){
+        fn.call(trigger, e);
+      });
+    });
+  }
+
+  function objectLoad(e){
+    this.contentDocument.defaultView.__resizeTrigger__ = this.__resizeElement__;
+    this.contentDocument.defaultView.addEventListener('resize', resizeListener);
+  }
+
+  window.addResizeListener = function(element, fn){
+    if (!element.__resizeListeners__) {
+      element.__resizeListeners__ = [];
+      if (attachEvent) {
+        element.__resizeTrigger__ = element;
+        element.attachEvent('onresize', resizeListener);
+      }
+      else {
+        if (getComputedStyle(element).position == 'static') element.style.position = 'relative';
+        var obj = element.__resizeTrigger__ = document.createElement('object');
+        obj.setAttribute('style', 'display: block; position: absolute; top: 0; left: 0; height: 100%; width: 100%; overflow: hidden; pointer-events: none; z-index: -1;');
+        obj.__resizeElement__ = element;
+        obj.onload = objectLoad;
+        obj.type = 'text/html';
+        if (isIE) element.appendChild(obj);
+        obj.data = 'about:blank';
+        if (!isIE) element.appendChild(obj);
+      }
+    }
+    element.__resizeListeners__.push(fn);
+  };
+
+  window.removeResizeListener = function(element, fn){
+    element.__resizeListeners__.splice(element.__resizeListeners__.indexOf(fn), 1);
+    if (!element.__resizeListeners__.length) {
+      if (attachEvent) element.detachEvent('onresize', resizeListener);
+      else {
+        element.__resizeTrigger__.contentDocument.defaultView.removeEventListener('resize', resizeListener);
+        element.__resizeTrigger__ = !element.removeChild(element.__resizeTrigger__);
+      }
+    }
+  }
+})();
+
 /* class */ var Dom = {};
 
 /* static int */ Dom.workOn = function (xpath, node, worker) {
@@ -657,6 +723,10 @@ Dom.parseToNode = function (xml, dom) {
     return node;
 }
 Dom.parseDocument = function (xml) {
+    if (xml && xml.charCodeAt(0) === 0xFEFF) {
+        xml = xml.substr(1);
+    }
+
     var dom = Dom.parser.parseFromString(xml, "text/xml");
     return dom;
 };
@@ -1091,7 +1161,21 @@ Svg.getHeight = function (dom) {
     }
     return 0;
 };
-
+Svg.SYMBOL_NAME_ATTR = "symbolName";
+Svg.getSymbolName = function (node) {
+    if (node.hasAttributeNS(PencilNamespaces.p, Svg.SYMBOL_NAME_ATTR)) {
+        return node.getAttributeNS(PencilNamespaces.p, Svg.SYMBOL_NAME_ATTR);
+    } else {
+        return null;
+    }
+};
+Svg.setSymbolName = function (node, name) {
+    if (typeof(name) === "undefined" || name === null) {
+        node.remoteAttributeNS(PencilNamespaces.p, Svg.SYMBOL_NAME_ATTR);
+    } else {
+        return node.setAttributeNS(PencilNamespaces.p, Svg.SYMBOL_NAME_ATTR, name);
+    }
+};
 
 var Local = {};
 Local.getInstalledFonts = function () {
@@ -1108,7 +1192,9 @@ Local.getInstalledFonts = function () {
         for (var font of installedFonts) {
             if (installedFaces.indexOf(font.name) >= 0) continue;
             installedFaces.push(font.name);
-            localFonts.push({family: font.name, type: font._type});
+            var weights = [];
+            for (var v of font.variants) if (weights.indexOf(v.weight) < 0) weights.push(v.weight);
+            localFonts.push({family: font.name, type: font._type, weights: weights});
         }
     }
 
@@ -1128,7 +1214,8 @@ Local.getInstalledFonts = function () {
         if (contained) continue;
 
         systemFonts.push({
-            family: fonts[i].family
+            family: fonts[i].family,
+            weights: ["normal", "bold"]
         });
     }
 
@@ -2136,6 +2223,43 @@ Util.importSandboxFunctions = function () {
         pencilSandbox[f.name] = f;
     }
 };
+Util.workOnListAsync = function (list, worker, callback) {
+    var index = -1;
+    var next = function () {
+        index ++;
+        if (!list || index >= list.length) {
+            if (callback) callback();
+            return;
+        }
+
+        var item = list[index];
+        worker(item, index, next);
+    }
+    next();
+};
+Util.compareVersion = function (version1, version2) {
+    var a = version1.split(/\./);
+    var b = version2.split(/\./);
+
+    for (var i = 0; i < Math.min(a.length, b.length); i ++) {
+        var n1 = parseInt(a[i], 10);
+        var n2 = parseInt(b[i], 10);
+
+        if (isNaN(n1) || isNaN(n2)) {
+            n1 = a[i];
+            n2 = b[i];
+        }
+
+        if (n1 > n2) return 1;
+        if (n1 < n2) return -1;
+    }
+
+    if (a.length > b.length) return 1;
+    if (a.length < b.length) return -1;
+
+    return 0;
+};
+
 
 function pEval (expression, extra, codeLocation) {
     var result = null;
@@ -2147,7 +2271,7 @@ function pEval (expression, extra, codeLocation) {
             result = eval(expression)
         }
     } catch (ex) {
-        if (expression.length < 1000) error("Problematic code: " + expression);
+        if (expression.length < 2000) error("Problematic code: " + expression);
         if (codeLocation) error("Code location: " + codeLocation);
         Console.dumpError(ex);
     }
@@ -2341,7 +2465,7 @@ function copyFileSync(source, target) {
     fs.writeFileSync(targetFile, fs.readFileSync(source));
 }
 
-function copyFolderRecursiveSync( source, target ) {
+function copyFolderRecursiveSync(source, target) {
     var files = [];
 
     //check if folder needs to be created or integrated
@@ -2389,6 +2513,33 @@ function _after(fn, after) {
     after.call(this, result);
     return result;
   };
+}
+
+function getRequiredValue(input, message, pattern) {
+    var value = input.value;
+    var valid = pattern ? value.match(pattern) : value.trim().length > 0;
+    if (!valid) {
+        var e = new Error(message || "Please enter a valid value.");
+        e._input = input;
+        e._isValidationError = true;
+        throw e;
+    }
+
+    return value;
+}
+function handleCommonValidationError(e) {
+    if (e._isValidationError) {
+        Dialog.error(e.message, "", function () {
+            setTimeout(function () {
+                e._input.focus();
+                e._input.select();
+            }, 250);
+        });
+
+        return false;
+    } else {
+        throw e;
+    }
 }
 
 Util.importSandboxFunctions(geo_buildQuickSmoothCurve, geo_buildSmoothCurve, geo_getRotatedPoint, geo_pointAngle, geo_rotate, geo_translate, geo_vectorAngle, geo_vectorLength, geo_findIntersection);
