@@ -17,6 +17,7 @@ PrivateShapeDefParser.prototype.parseNode = function (dom) {
         var id = node.getAttribute("p:Id");
         var name = node.getAttribute("p:Name");
         var icon = node.getAttribute("p:Icon");
+
         var contentNode = Dom.getSingle("./p:Content/svg:g", node);
 
         var shapeDef = new PrivateShapeDef();
