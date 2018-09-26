@@ -231,29 +231,18 @@ OnMenuEditor.prototype.generateMenuItems = function () {
             type: "SubMenu",
             subItems: []
         }
-        var targetPageId = this.targetObject.getMetadata("RelatedPage");
+      var targetPageId = this.targetObject.getMetadata("RelatedPage");
         var linkSubItem = [];
         for(var i = 0; i < Pencil.controller.doc.pages.length; i++) {
             var page = Pencil.controller.doc.pages[i];
-            var item = {
-                label: page.name,
-                type: "Selection",
-                pageId: page.id,
-                isChecked:  function () {
-                    if (this.pageId == targetPageId) return true;
-                    return false;
-                },
-                isEnabled: function () {
-                    if (this.pageId == Pencil.controller.activePage.id) return false;
-                    return true;
-                },
-                handleAction: function () {
-                    console.log("link to " + this.pageId);
-                    thiz.targetObject.setMetadata("RelatedPage", this.pageId ? this.pageId : "");
-                }
-            };
-            linkItem.subItems.push(item);
+                
+           if (!page.parentPage) {
+                
+                var childSubMenu = buildLinkItemSubMenu(thiz, targetPageId, page);
+                    linkItem.subItems.push(childSubMenu);
+            } 
         }
+
         linkItem.subItems.push({
             label: "Nothing",
             type: "Selection",
@@ -271,3 +260,93 @@ OnMenuEditor.prototype.generateMenuItems = function () {
 };
 
 Pencil.registerEditor(OnMenuEditor);
+
+function buildLinkItemSubMenu(thiz, targetPageId, page){
+
+    if (page.children) {
+        if (page.children.length > 0) {
+
+            var childSubMenu = {
+                label: page.name,
+                type: "SubMenu",
+                subItems: []
+            };
+
+            var childSubMenuItem = {
+                label: page.name,
+                type: "Selection",
+                pageId: page.id,
+                isChecked: function () {
+                    if (this.pageId == targetPageId) return true;
+                    return false;
+                },
+                isEnabled: function () {
+                    if (this.pageId == Pencil.controller.activePage.id) return false;
+                    return true;
+                },
+                handleAction: function () {
+                    console.log("link to " + this.pageId);
+                    thiz.targetObject.setMetadata("RelatedPage", this.pageId ? this.pageId : "");
+                }
+            };
+
+            childSubMenu.subItems.push(childSubMenuItem);
+
+            for (var childIndex in page.children) {
+
+                childPage = page.children[childIndex];
+
+                if (childPage.children.length > 0){
+
+                    childPageItem = buildLinkItemSubMenu(thiz, targetPageId,childPage);
+
+                } else {
+
+                    var childPageItem = {
+                        label: childPage.name,
+                        type: "Selection",
+                        pageId: childPage.id,
+                        isChecked: function () {
+                            if (this.pageId == targetPageId) return true;
+                            return false;
+                        },
+                        isEnabled: function () {
+                            if (this.pageId == Pencil.controller.activePage.id) return false;
+                            return true;
+                        },
+                        handleAction: function () {
+                            console.log("link to " + this.pageId);
+                            thiz.targetObject.setMetadata("RelatedPage", this.pageId ? this.pageId : "");
+                        }
+                    };
+
+                }
+
+                childSubMenu.subItems.push(childPageItem);
+
+            }
+
+            return childSubMenu;
+        } 
+    } 
+
+    var item = {
+        label: page.name,
+        type: "Selection",
+        pageId: page.id,
+        isChecked: function () {
+            if (this.pageId == targetPageId) return true;
+            return false;
+        },
+        isEnabled: function () {
+            if (this.pageId == Pencil.controller.activePage.id) return false;
+            return true;
+        },
+        handleAction: function () {
+            console.log("link to " + this.pageId);
+            thiz.targetObject.setMetadata("RelatedPage", this.pageId ? this.pageId : "");
+        }
+    };
+    return item;
+
+}

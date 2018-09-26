@@ -15,12 +15,16 @@ XMLDocumentPersister.load = function (file) {
     return XMLDocumentPersister.parse(dom);
 };
 
-XMLDocumentPersister.parse = function (dom) {
-    var doc = new PencilDocument();
-    Dom.workOn("./p:Properties/p:Property", dom.documentElement, function (propNode) {
+function workOnProperty(doc, element){
+    Dom.workOn("./p:Properties/p:Property", element, function (propNode) {
         doc.properties[propNode.getAttribute("name")] = propNode.textContent;
     });
-    Dom.workOn("./p:Pages/p:Page", dom.documentElement, function (pageNode) {
+
+}
+
+function workOnPage(doc, element) {
+
+    Dom.workOn("./p:Pages/p:Page", element, function (pageNode) {
         var page = XMLDocumentPersister.parsePage(pageNode, doc);
 
         for (i in XMLDocumentPersister.hooks) {
@@ -43,6 +47,27 @@ XMLDocumentPersister.parse = function (dom) {
         }
     });
 
+}
+
+function workOnDocument(doc, element) {
+
+    Dom.workOn("./p:Documents/p:Document", dom.documentElement, function (documentNode) {
+        var document = XMLDocumentPersister.parseDocument(documentNode, doc);
+
+        doc.addDocument(document);
+
+    });
+
+}
+
+XMLDocumentPersister.parse = function (dom) {
+    var doc = new PencilDocument();
+    workOnProperty(doc, dom.documentElement);
+
+    workOnPage(doc, dom.documentElement);
+
+    workOnDocument(doc, dom.documentElement);
+
     for (i in XMLDocumentPersister.hooks) {
         var hook = XMLDocumentPersister.hooks[i];
         if (hook.onLoad) {
@@ -60,9 +85,9 @@ XMLDocumentPersister.parse = function (dom) {
 
 XMLDocumentPersister.parsePage = function (pageNode, doc) {
     var page = new Page(doc);
-    Dom.workOn("./p:Properties/p:Property", pageNode, function (propNode) {
-        page.properties[propNode.getAttribute("name")] = propNode.textContent;
-    });
+
+    workOnProperty(doc, pageNode)
+
     var contentNode = Dom.getSingle("./p:Content", pageNode);
     if (contentNode) {
         page.contentNode = document.importNode(contentNode, true);
@@ -73,6 +98,18 @@ XMLDocumentPersister.parsePage = function (pageNode, doc) {
     return page;
 };
 
+XMLDocumentPersister.parseDocument = function (documentNode, doc) {
+    var document = new Document(doc);
+
+    workOnProperty(document, documentNode);
+
+    workOnPage(document, documentNode);
+
+    workOnDocument(document, documentNode);
+
+    return document;
+};
+
 XMLDocumentPersister.save = function (doc, filePath) {
 
     var file = Components.classes["@mozilla.org/file/local;1"]
@@ -80,7 +117,6 @@ XMLDocumentPersister.save = function (doc, filePath) {
     file.initWithPath(filePath);
 
     XMLDocumentPersister.currentFile = file;
-
 
     for (i in XMLDocumentPersister.hooks) {
         var hook = XMLDocumentPersister.hooks[i];

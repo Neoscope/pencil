@@ -1,9 +1,12 @@
 {
   "name": "Pencil",
   "devDependencies": {
-    "electron-builder": "13.3.0",
+    "devtron": "^1.4.0",
     "electron": "1.4.14",
-    "rimraf": "^2.5.4"
+    "electron-builder": "13.3.0",
+    "electron-devtools-installer": "^2.2.3",
+    "rimraf": "^2.6.2",
+    "spectron": "^3.8.0"
   },
   "build": {
     "appId": "vn.evolus.pencil",
@@ -13,23 +16,30 @@
       "category": "public.app-category.graphics-design"
     },
     "dmg": {
-      "contents": [{
-        "x": 356,
-        "y": 140,
-        "type": "link",
-        "path": "/Applications"
-      }, {
-        "x": 130,
-        "y": 145,
-        "type": "file"
-      }]
+      "contents": [
+        {
+          "x": 356,
+          "y": 140,
+          "type": "link",
+          "path": "/Applications"
+        },
+        {
+          "x": 130,
+          "y": 145,
+          "type": "file"
+        }
+      ]
     },
     "linux": {
       "description": "An open-source GUI prototyping tool that is available for ALL platforms.",
       "synopsis": "An open-source GUI prototyping tool that is available for ALL platforms.",
       "maintainer": "Nguyen Tien Dzung <ngtdungnt@gmail.com>",
       "vendor": "Evolus",
-      "target": ["deb", "rpm", "tar.gz"],
+      "target": [
+        "deb",
+        "rpm",
+        "tar.gz"
+      ],
       "depends": [],
       "category": "Graphics",
       "packageCategory": "graphics"
@@ -51,9 +61,13 @@
       "cache": ".electron-cache"
     },
     "fileAssociations": {
-      "ext": ["ep", "epz", "epgz"],
+      "ext": [
+        "ep",
+        "epz",
+        "epgz"
+      ],
       "name": "Pencil Document"
-	}
+    }
   },
   "scripts": {
     "postinstall": "install-app-deps",
@@ -69,5 +83,11 @@
     "dist:win32": "./node_modules/.bin/build --windows --ia32 --x64",
     "dist:osx": "./node_modules/.bin/build --macos"
   },
-  "private": true
+  "private": true,
+  "dependencies": {
+    "debug": "^3.1.0",
+    "electron-context-menu": "^0.9.1",
+    "electron-debug": "^1.5.0",
+    "menubar": "^5.2.3"
+  }
 }

@@ -1,39 +1,54 @@
 function PencilDocument() {
-    this.properties = {};
-    this.pages = [];
+    initDocument(this);
 }
+
+// @todo create initPencilDocument error message
+function initDocument(doc){
+    if (!doc) throw Util.getMessage("attempting.to.construct.a.page.outside.the.scope.of.a.valid.document");
+
+    doc.properties = {};
+    doc.pages = [];
+    doc.documents = [];
+}
+
 PencilDocument.prototype.toDom = function () {
+
     var dom = Controller.parser.parseFromString("<Document xmlns=\"" + PencilNamespaces.p + "\"></Document>", "text/xml");
+
+    //properties
+    PropertiestoDom(this, dom);
+
+    //pages
+    PagestoDom(this, dom);
+
+    //documents
+    DocumentstoDom(this, dom);
+
+    return dom;
+};
+
+// @TODO add error message
+function PropertiestoDom (doc, dom){
+    if (!doc) throw Util.getMessage("attempting.to.construct.a.page.outside.the.scope.of.a.valid.document");
 
     //properties
     var propertyContainerNode = dom.createElementNS(PencilNamespaces.p, "Properties");
     dom.documentElement.appendChild(propertyContainerNode);
 
-    for (name in this.properties) {
+    for (name in doc.properties) {
         var propertyNode = dom.createElementNS(PencilNamespaces.p, "Property");
         propertyContainerNode.appendChild(propertyNode);
 
         propertyNode.setAttribute("name", name);
-        propertyNode.appendChild(dom.createTextNode(this.properties[name].toString()));
+        propertyNode.appendChild(dom.createTextNode(doc.properties[name].toString()));
     }
 
-    //pages
-    var pageContainerNode = dom.createElementNS(PencilNamespaces.p, "Pages");
-    dom.documentElement.appendChild(pageContainerNode);
-
-    for (i in this.pages) {
-        var pageNode = dom.createElementNS(PencilNamespaces.p, "Page");
-        pageContainerNode.appendChild(pageNode);
-
-        pageNode.setAttribute("href", this.pages[i].pageFileName);
-    }
-
-    return dom;
-};
+}
 
 PencilDocument.prototype.addPage = function (page) {
     this.pages[this.pages.length] = page;
 };
+
 PencilDocument.prototype.getPageById = function (id) {
     for (var i in this.pages) {
         if (this.pages[i].properties.id == id) return this.pages[i];
@@ -41,6 +56,7 @@ PencilDocument.prototype.getPageById = function (id) {
 
     return null;
 };
+
 PencilDocument.prototype.getPageByFid = function (fid) {
     for (var i in this.pages) {
         if (this.pages[i].properties.fid == fid) return this.pages[i];
@@ -56,6 +72,24 @@ PencilDocument.prototype.getFirstPageByName = function (name) {
     return null;
 };
 
+addDocumentFunction =  function (document) {
+    this.documents[this.documents.length] = document;
+};
+
+PencilDocument.prototype.addDocument = addDocumentFunction;
+
+
+getDocumentByIdFunction = function (id) {
+    for (var i in this.documents) {
+        if (this.documents[i].properties.id == id) return this.documents[i];
+    }
+
+    return null;
+};
+
+
+PencilDocument.prototype.getDocumentById = getDocumentByIdFunction;
+
 
 function Page(doc) {
     if (!doc) throw Util.getMessage("attempting.to.construct.a.page.outside.the.scope.of.a.valid.document");
@@ -69,6 +103,24 @@ function Page(doc) {
     // this.rasterizeCache = null;
     this.children = [];
 }
+
+// @TODO add error message
+function PagestoDom(doc, dom) {
+    if (!doc) throw Util.getMessage("attempting.to.construct.a.page.outside.the.scope.of.a.valid.document");
+
+    //pages
+    var pageContainerNode = dom.createElementNS(PencilNamespaces.p, "Pages");
+    dom.documentElement.appendChild(pageContainerNode);
+
+    for (i in doc.pages) {
+        var pageNode = dom.createElementNS(PencilNamespaces.p, "Page");
+        pageContainerNode.appendChild(pageNode);
+
+        pageNode.setAttribute("href", doc.pages[i].pageFileName);
+    }
+
+}
+
 Page.PROPERTIES = ["id", "fid", "name", "width", "height", "backgroundPageId", "backgroundColor", "note", "pageFileName", "parentPageId", "scrollTop", "scrollLeft", "zoom"];
 Page.PROPERTY_MAP = {
     "id": "id",
@@ -230,3 +282,61 @@ Page.prototype.generateFriendlyId = function (usedFriendlyIds) {
     usedFriendlyIds.push(name);
     return name;
 };
+
+
+// @TODO implement  Documents
+// @TODO create error message
+function Document(doc) {
+    if (!doc) throw Util.getMessage("attempting.to.construct.a.page.outside.the.scope.of.a.valid.document");
+    
+    initDocument(doc);
+
+    // this.doc = doc;
+    // this.properties = {};
+    // this.contentNode = null;
+    // this.bg = {
+    //     lastId: null,
+    //     lastUpdateTimestamp: 0
+    // };
+    // this.rasterizeCache = null;
+    this.children = [];
+}
+
+// @TODO add error message
+function DocumentstoDom(doc, dom) {
+    if (!doc) throw Util.getMessage("attempting.to.construct.a.page.outside.the.scope.of.a.valid.document");
+
+    //documents
+    var includeDocumentContainerNode = dom.createElementNS(PencilNamespaces.p, "Documents");
+    dom.documentElement.appendChild(includeDocumentContainerNode);
+
+    for (includeDocument in doc.documents) {
+        var inclDocNode = dom.createElementNS(PencilNamespaces.p, "Document");
+        includeDocumentContainerNode.appendChild(inclDocNode);
+
+        //properties
+        PropertiestoDom(doc, inclDocNode);
+
+        //pages
+        PagestoDom(doc, inclDocNode);
+
+        //documents
+        DocumentstoDom(doc, inclDocNode);
+    }
+
+}
+
+Document.PROPERTIES = ["id", "fid", "name", "description", "createDate", "importDate"];
+Document.PROPERTY_MAP = {
+    "id": "id",
+    "fid": "fid",
+    "name": "name",
+    "description": "description",
+    "createDate": "createDate",
+    "importDate": "importDate"
+};
+
+Document.prototype.addDocument = addDocumentFunction ;
+
+Document.prototype.getDocumentById = getDocumentByIdFunction;
+
